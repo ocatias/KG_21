@@ -45,8 +45,9 @@ class Embedder:
         self.edges = edges
         self.verticesVec = []
         self.edgesVec = []
-        self.lamb = 0.7
-        self.lr = 0.05
+        self.labelToIndex =  {}
+        self.lamb = 0.9
+        self.lr = 0.01
         self.dim = 2
         self.edgesVecHistory = []
         self.verticesVecHistory = []
@@ -54,16 +55,19 @@ class Embedder:
         self.batchsize = 20
 
         for edge in self.edges:
-            self.edgesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
-            self.edgesVec[-1] = self.edgesVec[-1] / np.linalg.norm(self.edgesVec[-1])
+            if str(edge.label) not in self.labelToIndex:
+                self.edgesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
+                self.edgesVec[-1] = self.edgesVec[-1] / np.linalg.norm(self.edgesVec[-1])
+                self.labelToIndex[str(edge.label)] = len(self.labelToIndex)
 
         for vertex in self.vertices:
             self.verticesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
-        self.update_scores()
 
         for i, vertexVec in enumerate(self.verticesVec):
             self.verticesVec[i] = vertexVec / np.linalg.norm(vertexVec);
 
+        print(self.edges)
+        self.update_scores()
         self.update_history()
 
     def getEmbedding(self):
@@ -77,38 +81,38 @@ class Embedder:
 
         # We sample all edges multiple times, othwise we do not have enough samples
         for j in range(0,self.batchsize):
-            i = self.rng.randint(0, len(self.edges)-1)
+            i = self.rng.randint(0, len(self.edges) -1)
+            # print(i)
             edge = self.edges[i]
+            # self.edges[i].print()
+
             #Sample a corrupt edge (this is very ineffecient)
             while True:
                 if self.rng.randint(0,1) == 0:
-                    erroneous_edge = ed.Edge(edge.root, self.rng.choice(self.vertices))
+                    erroneous_edge = ed.Edge(edge.root, self.rng.choice(self.vertices), edge.label)
                 else:
-                    erroneous_edge = ed.Edge(self.rng.choice(self.vertices), edge.target)
-                if (not (erroneous_edge in self.edges)) and erroneous_edge.root != erroneous_edge.target:
-                    break;
+                    erroneous_edge = ed.Edge(self.rng.choice(self.vertices), edge.target, edge.label)
 
-                #
-                # if erroneous_edge.root == erroneous_edge.target:
-                #     continue;
-                #
-                # safe = True
-                #
-                # for edge in self.edges:
-                #     if(edge.root == erroneous_edge.root and edge.target == erroneous_edge.target):
-                #         safe = False
-                #         break;
-                #
-                # if safe:
-                #     break
+                if erroneous_edge.root == erroneous_edge.target:
+                    continue;
+
+                safe = True
+                for edge_to_check in self.edges:
+                    if(edge_to_check.root == erroneous_edge.root and edge_to_check.target == erroneous_edge.target and edge_to_check.label == erroneous_edge.label):
+                        safe = False
+                        break;
+
+                if safe:
+                    break
 
             # erroneous_edge.print()
 
-            batch.append([[edge.root, i, edge.target],[erroneous_edge.root, i, erroneous_edge.target]])
+            batch.append([[edge.root, edge.label, edge.target],[erroneous_edge.root, edge.label, erroneous_edge.target]])
 
         edgesVecUpdated = []
         vertexVecUpdated = []
 
+        # print(batch)
         # print('Gradients:')
 
         # Update the vertices
@@ -121,7 +125,7 @@ class Embedder:
                 if(correctTriplet[0] == v or correctTriplet [2] == v or erroneousTriplet[0] == v or erroneousTriplet[2] == v):
                     localLoss = self.lamb + self.distance(correctTriplet) - self.distance(erroneousTriplet)
                     # print('Local loss: ', localLoss)
-                    if(localLoss > 0):
+                    if(localLoss >= 0):
                         # print(i)
                         # loss += localLoss
                         if(correctTriplet[0] == v):
@@ -135,19 +139,19 @@ class Embedder:
             vertexVecUpdated.append(self.verticesVec[i] - gradient*self.lr)
 
         # Update the edges
-        for i,v in enumerate(self.edges):
+        for x in self.labelToIndex.items():
             gradient = 0
             for twoTriplets in batch:
                 correctTriplet = twoTriplets[0]
                 erroneousTriplet = twoTriplets[1]
 
                 # Note correctTriplet[1] == erroneousTriplet[1]
-                if(correctTriplet[1] == i and erroneousTriplet[1] == i):
-                    if((self.lamb + self.distance(correctTriplet) - self.distance(erroneousTriplet)) > 0):
-                        gradient += 2*self.distanceVector(correctTriplet) #For some reason this does not workd
+                if(str(correctTriplet[1]) == x[0] and str(erroneousTriplet[1]) == x[0]):
+                    if((self.lamb + self.distance(correctTriplet) - self.distance(erroneousTriplet)) >= 0):
+                        gradient +=  2*self.distanceVector(correctTriplet) #For some reason this does not workd
                         gradient += -2*self.distanceVector(erroneousTriplet) #For some reason this does not workd
 
-            edgesVecUpdated.append(self.edgesVec[i] - gradient*self.lr)
+            edgesVecUpdated.append(self.edgesVec[x[1]] - gradient*self.lr)
 
 
         for twoTriplets in batch:
@@ -168,12 +172,13 @@ class Embedder:
         self.update_scores()
         self.update_history()
         print("Loss: ", loss)
+        # print(self.edgesVec)
 
-    # triple = [vertexRoot, edgeIndex, vertexTarget]
+    # triple = [vertexRoot, edge_label, vertexTarget]
     def distanceVector(self, triplet):
         vertexRootIdx = self.vertices.index(triplet[0])
         vertexTargetIdx = self.vertices.index(triplet[2])
-        return self.verticesVec[vertexRootIdx] + self.edgesVec[triplet[1]] - self.verticesVec[vertexTargetIdx]
+        return self.verticesVec[vertexRootIdx] + self.edgesVec[self.labelToIndex[str(triplet[1])]] - self.verticesVec[vertexTargetIdx]
 
     # triple = [vertexRoot, edgeIndex, vertexTarget]
     def distance(self, triplet):
@@ -197,7 +202,7 @@ class Embedder:
     def update_scores(self):
         score = 0
         for i,edge in enumerate(self.edges):
-            score += self.distance([edge.root, i, edge.target])
+            score += self.distance([edge.root, edge.label, edge.target])
         self.scores.append(score)
 
     def get_score(self):
@@ -225,8 +230,8 @@ class Embedder:
                 vertexVec = self.verticesVecHistory[i][self.vertices.index(edge.root)]
                 origin0.append(vertexVec[0])
                 origin1.append(vertexVec[1])
-                V0.append(self.edgesVecHistory[i][j][0])
-                V1.append(self.edgesVecHistory[i][j][1])
+                V0.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][0])
+                V1.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][1])
 
             for vec in self.verticesVecHistory[i]:
                 plt.plot(vec[0] , vec[1], 'bo')
@@ -242,29 +247,29 @@ class Embedder:
             plt.show()
 
 
-    def printVisualization(self):
-        # Add unit circle
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
-        ax.add_patch(circ)
-
-        origin0 = []
-        origin1 = []
-        V0 = []
-        V1 = []
-        for i,edge in enumerate(self.edges):
-            vertexVec = self.verticesVec[self.vertices.index(edge.root)]
-            origin0.append(vertexVec[0])
-            origin1.append(vertexVec[1])
-            V0.append(self.edgesVec[i][0])
-            V1.append(self.edgesVec[i][1])
-
-        for vec in self.verticesVec:
-            plt.plot(vec[0] , vec[1], 'bo')
-
-        plt.quiver(origin0, origin1, V0, V1, angles='xy', scale_units='xy', scale=1)
-
-        plt.xlim([-1.2,1.2])
-        plt.ylim([-1.2,1.2])
-        plt.show()
+    # def printVisualization(self):
+    #     # Add unit circle
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(1, 1, 1)
+    #     circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
+    #     ax.add_patch(circ)
+    #
+    #     origin0 = []
+    #     origin1 = []
+    #     V0 = []
+    #     V1 = []
+    #     for i,edge in enumerate(self.edges):
+    #         vertexVec = self.verticesVec[self.vertices.index(edge.root)]
+    #         origin0.append(vertexVec[0])
+    #         origin1.append(vertexVec[1])
+    #         V0.append(self.edgesVec[i][0])
+    #         V1.append(self.edgesVec[i][1])
+    #
+    #     for vec in self.verticesVec:
+    #         plt.plot(vec[0] , vec[1], 'bo')
+    #
+    #     plt.quiver(origin0, origin1, V0, V1, angles='xy', scale_units='xy', scale=1)
+    #
+    #     plt.xlim([-1.2,1.2])
+    #     plt.ylim([-1.2,1.2])
+    #     plt.show()
