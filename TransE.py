@@ -45,12 +45,13 @@ class Embedder:
         self.edges = edges
         self.verticesVec = []
         self.edgesVec = []
-        self.lamb = 20
-        self.lr = 0.01
+        self.lamb = 0.7
+        self.lr = 0.05
         self.dim = 2
         self.edgesVecHistory = []
         self.verticesVecHistory = []
         self.rng = random.Random(seed)
+        self.batchsize = 20
 
         for edge in self.edges:
             self.edgesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
@@ -73,12 +74,33 @@ class Embedder:
 
         # We do not use minibatches
         batch = []
-        for i, edge in enumerate(self.edges):
+
+        # We sample all edges multiple times, othwise we do not have enough samples
+        for j in range(0,self.batchsize):
+            i = self.rng.randint(0, len(self.edges)-1)
+            edge = self.edges[i]
             #Sample a corrupt edge (this is very ineffecient)
             while True:
-                erroneous_edge = ed.Edge(self.rng.choice(self.vertices), self.rng.choice(self.vertices))
+                if self.rng.randint(0,1) == 0:
+                    erroneous_edge = ed.Edge(edge.root, self.rng.choice(self.vertices))
+                else:
+                    erroneous_edge = ed.Edge(self.rng.choice(self.vertices), edge.target)
                 if (not (erroneous_edge in self.edges)) and erroneous_edge.root != erroneous_edge.target:
                     break;
+
+                #
+                # if erroneous_edge.root == erroneous_edge.target:
+                #     continue;
+                #
+                # safe = True
+                #
+                # for edge in self.edges:
+                #     if(edge.root == erroneous_edge.root and edge.target == erroneous_edge.target):
+                #         safe = False
+                #         break;
+                #
+                # if safe:
+                #     break
 
             # erroneous_edge.print()
 
@@ -120,9 +142,11 @@ class Embedder:
                 erroneousTriplet = twoTriplets[1]
 
                 # Note correctTriplet[1] == erroneousTriplet[1]
-                if(correctTriplet[1] == i):
+                if(correctTriplet[1] == i and erroneousTriplet[1] == i):
                     if((self.lamb + self.distance(correctTriplet) - self.distance(erroneousTriplet)) > 0):
-                        gradient += 2*self.distanceVector(correctTriplet)
+                        gradient += 2*self.distanceVector(correctTriplet) #For some reason this does not workd
+                        gradient += -2*self.distanceVector(erroneousTriplet) #For some reason this does not workd
+
             edgesVecUpdated.append(self.edgesVec[i] - gradient*self.lr)
 
 
@@ -190,8 +214,9 @@ class Embedder:
             ax.clear()
             circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
             ax.add_patch(circ)
-            plt.xlim([-1.2,1.2])
-            plt.ylim([-1.2,1.2])
+            plt.xlim([-3.2,3.2])
+            plt.ylim([-3.2,3.2])
+            plt.title(i)
             origin0 = []
             origin1 = []
             V0 = []
