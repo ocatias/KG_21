@@ -46,7 +46,7 @@ class Embedder:
         self.verticesVec = []
         self.edgesVec = []
         self.labelToIndex =  {}
-        self.lamb = 0.9
+        self.lamb = 1.2
         self.lr = 0.01
         self.dim = 2
         self.edgesVecHistory = []
@@ -215,6 +215,9 @@ class Embedder:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         plt.gca().set_aspect('equal', adjustable='box')
+        import matplotlib.cm as cm
+        from matplotlib.colors import Normalize
+        colormap = cm.inferno
         def animate(i):
             ax.clear()
             circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
@@ -226,17 +229,22 @@ class Embedder:
             origin1 = []
             V0 = []
             V1 = []
+            colors = []
+
             for j,edge in enumerate(self.edges):
                 vertexVec = self.verticesVecHistory[i][self.vertices.index(edge.root)]
                 origin0.append(vertexVec[0])
                 origin1.append(vertexVec[1])
                 V0.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][0])
                 V1.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][1])
+                colors.append(self.labelToIndex[str(edge.label)])
 
             for vec in self.verticesVecHistory[i]:
                 plt.plot(vec[0] , vec[1], 'bo')
 
-            plt.quiver(origin0, origin1, V0, V1, angles='xy', scale_units='xy', scale=1)
+            norm = Normalize()
+            norm.autoscale(colors)
+            plt.quiver(origin0, origin1, V0, V1, color=colormap(norm(colors)), angles='xy', scale_units='xy', scale=1)
 
         anim = FuncAnimation(fig, animate, interval=1, frames = len(self.verticesVecHistory))
         writergif = animation.writers['ffmpeg']()
