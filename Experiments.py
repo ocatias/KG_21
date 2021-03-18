@@ -6,10 +6,10 @@ def main():
 
     print('Hello World!')
     vertices = [1, 2, 3, 4, 5, 6, 7, 8]
-    edges = [ ed.Edge(1,2,1), ed.Edge(3,4,1), ed.Edge(3,5,2), ed.Edge(7,8,2)]
+    # edges = [ ed.Edge(1,2,1), ed.Edge(3,4,1), ed.Edge(3,5,2), ed.Edge(7,8,2)]
     # edges = [ ed.Edge(1,2,1), ed.Edge (3,4,2)]
 
-    # edges = [ ed.Edge(1,2), ed.Edge(3,4), ed.Edge(6,7), ed.Edge(1,8), ed.Edge(1,7), ed.Edge(2,3)]
+    edges = [ ed.Edge(1,2,1), ed.Edge(3,4,2), ed.Edge(6,7,3), ed.Edge(1,8,1), ed.Edge(1,7,4), ed.Edge(2,3,2)]
 
     # vertices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
     # edges = [ ed.Edge(1,2), ed.Edge(3,4), ed.Edge(6,7), ed.Edge(1,8), ed.Edge(1,7), ed.Edge(2,3),
@@ -25,8 +25,8 @@ def main():
 
     # ember.printAnimation()
 
-    ember.printAnimation()
-    # ember.exportAnimation('its_not_getting_any_better2')
+    # ember.printAnimation()
+    ember.exportAnimation('example3')
 
 
 if __name__ == "__main__":
