@@ -1,5 +1,5 @@
 # KG_21
-A 2d visualization of the **TransE** algorithm from [*Translating Embeddings for Modeling Multi-relational Data* by Bordes et al. (2013)](https://proceedings.neurips.cc/paper/2013/file/1cecc7a77928ca8133fa24680a88d2f9-Paper.pdf).
+An implementation and visualization of the **TransE** algorithm from [*Translating Embeddings for Modeling Multi-relational Data* by Bordes et al. (2013)](https://proceedings.neurips.cc/paper/2013/file/1cecc7a77928ca8133fa24680a88d2f9-Paper.pdf).
 
 ## 2D Visualizations
 <img src="example_0.gif" width="400"> <img src="example_1.gif" width="400">
