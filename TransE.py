@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import copy
 from matplotlib.animation import FuncAnimation
 import matplotlib.animation as animation
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class Embedding:
@@ -40,33 +41,39 @@ class Embedder:
         self.edgesVecHistory.append(copy.deepcopy(self.edgesVec))
         self.verticesVecHistory.append(copy.deepcopy(self.verticesVec))
 
-    def __init__(self, vertices, edges, seed = 100):
+    def __init__(self, vertices, edges, dimensions, seed = 100):
         self.vertices = vertices
         self.edges = edges
         self.verticesVec = []
         self.edgesVec = []
         self.labelToIndex =  {}
         self.lamb = 1.2
-        self.lr = 0.01
-        self.dim = 2
+        self.lr = 0.007
+        self.dim = dimensions
         self.edgesVecHistory = []
         self.verticesVecHistory = []
         self.rng = random.Random(seed)
         self.batchsize = 20
 
+
+        lowerBound = [-2.0 / np.sqrt(self.dim)]
+        upperBound = [ 2.0 / np.sqrt(self.dim)]
+        lowerBound = lowerBound*self.dim
+        upperBound = upperBound*self.dim
+        # print(lowerBound, upperBound)
         for edge in self.edges:
+
             if str(edge.label) not in self.labelToIndex:
-                self.edgesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
+                self.edgesVec.append( np.random.uniform(low=lowerBound, high=upperBound, size=(1,self.dim))[0] )
                 self.edgesVec[-1] = self.edgesVec[-1] / np.linalg.norm(self.edgesVec[-1])
                 self.labelToIndex[str(edge.label)] = len(self.labelToIndex)
 
         for vertex in self.vertices:
-            self.verticesVec.append( np.random.uniform(low=[-2.0 / np.sqrt(self.dim), -2.0 / np.sqrt(self.dim)], high=[2.0 / np.sqrt(self.dim), 2.0 / np.sqrt(self.dim)], size=(1,2))[0] )
+            self.verticesVec.append( np.random.uniform(low=lowerBound, high=upperBound, size=(1,self.dim))[0] )
 
         for i, vertexVec in enumerate(self.verticesVec):
             self.verticesVec[i] = vertexVec / np.linalg.norm(vertexVec);
 
-        print(self.edges)
         self.update_scores()
         self.update_history()
 
@@ -212,23 +219,56 @@ class Embedder:
         self.exportAnimation()
 
     def exportAnimation(self, exportName = None):
+        halfFramLength = 1.3
+
+        if self.dim == 1:
+            print('ERROR: Visualization is not implemented for 1 dimension')
+            return
+
+        if self.dim > 3:
+            print('WARNING: trying to visualize more then 3 dimensions!')
+
         fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        plt.gca().set_aspect('equal', adjustable='box')
+        if self.dim == 2:
+            ax = fig.add_subplot(1, 1, 1)
+            plt.gca().set_aspect('equal', adjustable='box')
+
+        elif self.dim >= 3:
+            ax = fig.gca(projection='3d')
+            # ax.set_aspect('equal')
+            # Ensure that all axis have the same scale
+            # Code from Remy F: https://stackoverflow.com/questions/13685386/matplotlib-equal-unit-length-with-equal-aspect-ratio-z-axis-is-not-equal-to
+
         import matplotlib.cm as cm
         from matplotlib.colors import Normalize
         colormap = cm.inferno
         def animate(i):
             ax.clear()
-            circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
-            ax.add_patch(circ)
-            plt.xlim([-3.2,3.2])
-            plt.ylim([-3.2,3.2])
+            if self.dim == 2:
+                circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
+                ax.add_patch(circ)
+
+                plt.xlim([-halfFramLength, halfFramLength])
+                plt.ylim([-halfFramLength, halfFramLength])
+            if self.dim >= 3:
+                # Sphere code from AndrewCox: https://stackoverflow.com/questions/13685386/matplotlib-equal-unit-length-with-equal-aspect-ratio-z-axis-is-not-equal-to
+                u = np.linspace(0, 2*np.pi, 100)
+                v = np.linspace(0, np.pi, 100)
+                x = np.outer(np.cos(u), np.sin(v))
+                y = np.outer(np.sin(u), np.sin(v))
+                z = np.outer(np.ones(np.size(u)), np.cos(v))
+                ax.plot_surface(x, y, z, alpha = 0.1)
+                ax.view_init(elev=22., azim=i)
+
             plt.title(i)
             origin0 = []
             origin1 = []
+            origin2 = []
+
             V0 = []
             V1 = []
+            V2 = []
+
             colors = []
 
             for j,edge in enumerate(self.edges):
@@ -237,47 +277,40 @@ class Embedder:
                 origin1.append(vertexVec[1])
                 V0.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][0])
                 V1.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][1])
+                if self.dim > 2:
+                    origin2.append(vertexVec[2])
+                    V2.append(self.edgesVecHistory[i][self.labelToIndex[str(edge.label)]][2])
+
                 colors.append(self.labelToIndex[str(edge.label)])
 
             for vec in self.verticesVecHistory[i]:
-                plt.plot(vec[0] , vec[1], 'bo')
+                if self.dim == 2:
+                    plt.plot(vec[0] , vec[1], 'bo')
+                else:
+                    plt.plot(vec[0] , vec[1], vec[2], 'bo')
 
             norm = Normalize()
             norm.autoscale(colors)
-            plt.quiver(origin0, origin1, V0, V1, color=colormap(norm(colors)), angles='xy', scale_units='xy', scale=1)
 
-        anim = FuncAnimation(fig, animate, interval=1, frames = len(self.verticesVecHistory))
+            # print(self.labelToIndex)
+            # print(colors)
+            if self.dim == 2:
+                plt.quiver(origin0, origin1, V0, V1, color=colormap(norm(colors)), angles='xy', scale_units='xy', scale=1)
+            else:
+                colors = np.concatenate((colors, np.repeat(colors, 2)))
+
+                plt.quiver(origin0, origin1, origin2, V0, V1, V2, color=colormap(norm(colors)), normalize=True)
+                ax.set_box_aspect([1,1,1])
+                ax.set_xlim3d([-halfFramLength, halfFramLength])
+                ax.set_ylim3d([-halfFramLength, halfFramLength])
+                ax.set_zlim3d([-halfFramLength, halfFramLength])
+
+            # print(origin0, origin1, origin2, V0, V1, V2)
+
+        anim = FuncAnimation(fig, animate, interval=20, frames = len(self.verticesVecHistory))
         writergif = animation.writers['ffmpeg']()
 
         if exportName is not None:
             anim.save(exportName + '.gif', writer=writergif, dpi=100)
         else:
             plt.show()
-
-
-    # def printVisualization(self):
-    #     # Add unit circle
-    #     fig = plt.figure()
-    #     ax = fig.add_subplot(1, 1, 1)
-    #     circ = plt.Circle((0, 0), radius=1, edgecolor='b', facecolor='None')
-    #     ax.add_patch(circ)
-    #
-    #     origin0 = []
-    #     origin1 = []
-    #     V0 = []
-    #     V1 = []
-    #     for i,edge in enumerate(self.edges):
-    #         vertexVec = self.verticesVec[self.vertices.index(edge.root)]
-    #         origin0.append(vertexVec[0])
-    #         origin1.append(vertexVec[1])
-    #         V0.append(self.edgesVec[i][0])
-    #         V1.append(self.edgesVec[i][1])
-    #
-    #     for vec in self.verticesVec:
-    #         plt.plot(vec[0] , vec[1], 'bo')
-    #
-    #     plt.quiver(origin0, origin1, V0, V1, angles='xy', scale_units='xy', scale=1)
-    #
-    #     plt.xlim([-1.2,1.2])
-    #     plt.ylim([-1.2,1.2])
-    #     plt.show()
